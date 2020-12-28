@@ -1,10 +1,18 @@
 #include <acknex.h>
 #include <windows.h>
 //#include <default.c>
-#include <ackphysx.h>
+#include "includes\\ackphysx.h"
+
+/*******************************************************************************************/
 
 #define PRAGMA_POINTER
 
+void RangerBreak ();
+void RangerGroundContact ();
+void RaceStart ();
+
+
+/*******************************************************************************************/
 
 SOUND *wavEngine = "resources\\sounds\\engine.wav";
 var sndEngine = 0;
@@ -16,6 +24,62 @@ SOUND *wavIntro = "resources\\sounds\\intro.wav";
 
 
 
+/*******************************************************************************************/
+
+BMAP *bmpArrow = "resources\\images\\arrow.tga";
+
+BMAP *bmpTitle = "resources\\images\\title.tga";
+BMAP *bmpPlayOff = "resources\\images\\play_off.tga";
+BMAP *bmpEditorOff = "resources\\images\\editor_off.tga";
+BMAP *bmpExitOff = "resources\\images\\exit_off.tga";
+BMAP *bmpPlayOn = "resources\\images\\play_on.tga";
+BMAP *bmpEditorOn = "resources\\images\\editor_on.tga";
+BMAP *bmpExitOn = "resources\\images\\exit_on.tga";
+
+PANEL *panTitle =
+{
+	window(0, 0, 512, 128, bmpTitle, NULL, NULL);
+}
+
+#define MAIN_PLAY   1
+#define MAIN_EDITOR 2
+#define MAIN_EXIT   3
+
+#define MAIN_PLAY_POS    0
+#define MAIN_EDITOR_POS  171
+#define MAIN_EXIT_POS    342
+
+PANEL *panMain =
+{
+	button(0,   0, bmpPlayOn,    bmpPlayOff,   bmpPlayOn,    ButtonPlay, NULL, ButtonOver);
+	button(171, 0, bmpEditorOff, bmpEditorOff, bmpEditorOff, NULL,       NULL, NULL);
+	button(342, 0, bmpExitOn,    bmpExitOff,   bmpExitOn,    ButtonExit, NULL, ButtonOver);
+}
+
+TEXT *txtLevels =
+{
+	pos_x = 10;
+	pos_y = 10;
+	
+	strings = 1024;
+	
+	flags = SHOW;
+}
+
+STRING *strLevel = "";
+int goalCount = 0;
+ENTITY *entGoal = NULL;
+
+/*******************************************************************************************/
+
+MATERIAL *mtlPerpective =
+{
+	effect = "shaders\\perspective.fx";
+}
+
+
+
+/*******************************************************************************************/
 
 typedef struct 
 {
@@ -45,40 +109,76 @@ RANGER *ranger =
 }
 
 
+/*******************************************************************************************/
 
-void RangerCreate ();
-void RangerBreak ();
-
-
-BMAP *bmpArrow = "resources\\images\\arrow.tga";
-
-BMAP *bmpTitle = "resources\\images\\title.tga";
-BMAP *bmpPlayOff = "resources\\images\\play_off.tga";
-BMAP *bmpEditorOff = "resources\\images\\editor_off.tga";
-BMAP *bmpExitOff = "resources\\images\\exit_off.tga";
-BMAP *bmpPlayOn = "resources\\images\\play_on.tga";
-BMAP *bmpEditorOn = "resources\\images\\editor_on.tga";
-BMAP *bmpExitOn = "resources\\images\\exit_on.tga";
-
-
-
-PANEL* panTitle =
+void EventChassis()
 {
-	window(0, 0, 16, 16, bmpTitle, NULL, NULL);
+	ENTITY *ent = NULL;
+	if(you)
+	{
+		if((you->skill99 > 0) && (you->body))
+		{
+			pXent_settype(you, 0, 0);
+			ent = you;
+			goalCount -= 1;
+		}
+		else
+		{
+			RangerBreak();
+			return;
+		}
+	}
+
+	wait(1);
+	
+	if(ent)
+		ent_remove(ent);
 }
 
-PANEL* panMain =
+void EventWheel()
 {
-	button(  0, 0, bmpPlayOn,   bmpPlayOff,   bmpPlayOn,   ButtonPlay,NULL,ButtonOver);
-	button(171, 0, bmpEditorOn, bmpEditorOff, bmpEditorOn, NULL,NULL,ButtonOver);
-	button(342, 0, bmpExitOn,   bmpExitOff,   bmpExitOn,   ButtonExit,NULL,ButtonOver);
+	ENTITY *ent = NULL;
+	if(you)
+	{
+		if((you->skill99 > 0) && (you->body))
+		{
+			pXent_settype(you, 0, 0);
+			ent = you;
+			goalCount -= 1;
+		}
+		else
+		{
+			if(ranger->traction == me)
+				ranger->inContact = 1;
+			return;
+		}
+	}
+
+	wait(1);
+	
+	if(ent)
+		ent_remove(ent);
 }
 
-
-MATERIAL *mtlPerpective =
+void EventAntenna()
 {
-	effect = "shaders\\perspective.fx";
+	ENTITY *ent = NULL;
+	if(you)
+	{
+		if((you->skill99 > 0) && (you->body))
+		{
+			pXent_settype(you, 0, 0);
+			ent = you;
+			goalCount -= 1;
+		}
+	}
+	wait(1);
+	
+	if(ent)
+		ent_remove(ent);
 }
+
+/*******************************************************************************************/
 
 void RangerFlip ()
 {
@@ -86,6 +186,14 @@ void RangerFlip ()
 	
 	pX_pause(1);
 
+	ENTITY *_ent = entGoal;
+	for(; _ent; _ent = _ent->parent)
+	{
+		pXent_setcollisionflag(ranger->antenna[0], _ent, NX_IGNORE_PAIR);
+		pXent_setcollisionflag(ranger->antenna[1], _ent, NX_IGNORE_PAIR);
+		pXent_setcollisionflag(ranger->antenna[2], _ent, NX_IGNORE_PAIR);
+	}
+	
 	pXcon_remove(ranger->antenna[0]);
 	pXcon_remove(ranger->antenna[1]);
 	pXcon_remove(ranger->antenna[2]);
@@ -93,7 +201,7 @@ void RangerFlip ()
 	pXent_settype(ranger->antenna[1], 0, PH_BOX);
 	pXent_settype(ranger->antenna[2], 0, PH_BOX);
 	
-	wait(1);
+	//wait(1);
 	
 	VECTOR vPos;
 	
@@ -130,42 +238,43 @@ void RangerFlip ()
 	pXcon_setparams1(ranger->antenna[2], vector(0, ranger->antenna[2]->y, ranger->antenna[1]->z), vector(1, 0, 0), NULL);
 	pXcon_setparams2(ranger->antenna[2], vector(-4, 4, 0), NULL, NULL);
 	
-	
 	pXent_setgroup(ranger->antenna[0], 2);
 	pXent_setgroup(ranger->antenna[1], 2);
 	pXent_setgroup(ranger->antenna[2], 3);
-
+	
+	ENTITY *_ent = entGoal;
+	for(; _ent; _ent = _ent->parent)
+	{
+		pXent_setcollisionflag(ranger->antenna[0], _ent, NX_NOTIFY_ON_START_TOUCH);
+		pXent_setcollisionflag(ranger->antenna[1], _ent, NX_NOTIFY_ON_START_TOUCH);
+		pXent_setcollisionflag(ranger->antenna[2], _ent, NX_NOTIFY_ON_START_TOUCH);
+	}
+	
 	pXent_setbodyflagall(NX_BF_FROZEN_POS_X, 1);
 	pXent_setbodyflagall(NX_BF_FROZEN_PAN, 1);
 	pXent_setbodyflagall(NX_BF_FROZEN_TILT, 1);
 	
-	pXent_setcollisionflag(ranger->antenna[2], NULL, NX_NOTIFY_ON_TOUCH);
-	ranger->antenna[2]->event = RangerBreak;
-	
 	ranger->direction *= -1;
 	
 	if(ranger->direction > 0)
-	{
 		ranger->traction = ranger->wheel[1];
-	}
 	else
-	{
 		ranger->traction = ranger->wheel[0];
-	}
 	
 	pX_pause(0);
-	
 }
 
 void RangerBreak ()
 {
 	if(!ranger->active) 
 		return;
-	ranger->active = 1;
+	ranger->active = 0;
 	
 	snd_play(wavCrash, 50, 0);
 	
-	snd_stop(sndEngine);
+	if(snd_playing(sndEngine))
+		snd_stop(sndEngine);
+	sndEngine = NULL;
 	
 	pXcon_remove(ranger->wheel[0]);
 	pXcon_remove(ranger->wheel[1]);
@@ -178,8 +287,13 @@ void RangerBreak ()
 	pXent_setgroup(ranger->antenna[1], 3);
 	pXent_setgroup(ranger->antenna[2], 3);
 	
-	
-	wait(-2);
+	var timer = 16;
+	while(timer > 0)
+	{
+		physX_run(time_frame / 16);
+		timer -= time_step;
+		wait(1);
+	}
 
 	pXent_settype(ranger->chassis, 0, PH_BOX);
 	pXent_settype(ranger->wheel[0], 0, PH_SPHERE);
@@ -195,27 +309,28 @@ void RangerBreak ()
 	ent_remove(ranger->antenna[1]);
 	ent_remove(ranger->antenna[2]);
 	
-	RangerCreate ();
+	RaceStart ();
 }
 
-void RangerGroundContact ()
-{
-	if(ranger->traction == me)
-		ranger->inContact = 1;
-}
+//void RangerGroundContact ()
+//{
+//	if(ranger->traction == me)
+//		ranger->inContact = 1;
+//}
 
-void RangerModelsCreate ()
+void RangerCreate (VECTOR *_vPos)
 {
-}
+	ranger->chassis  = ent_create("resources\\models\\bar.mdl",   _vPos, NULL);
+	_vPos->y += 110;
+	_vPos->z -= 70;
 
-void RangerCreate ()
-{
-	ranger->chassis  = ent_create("resources\\models\\bar.mdl",   vector(0,150,260), NULL);
-	ranger->wheel[0] = ent_create("resources\\models\\wheel.mdl", vector(0,40,200),  NULL);
-	ranger->wheel[1] = ent_create("resources\\models\\wheel.mdl", vector(0,260,200), NULL);
+	ranger->wheel[0] = ent_create("resources\\models\\wheel.mdl", _vPos, NULL);
+	
+	_vPos->y -= 220;
+	ranger->wheel[1] = ent_create("resources\\models\\wheel.mdl", _vPos, NULL);
 	
 	VECTOR vPos;
-	vec_set(&vPos, vector(0,70,40));
+	vec_set(&vPos, vector(0, -70, 40));
 	vec_add(&vPos, &ranger->chassis->x);
 	ranger->antenna[0] = ent_create("resources\\models\\antena.mdl", &vPos, NULL);
 	vPos.z += 30;
@@ -303,36 +418,42 @@ void RangerCreate ()
 	pXcon_setparams2(ranger->antenna[2], vector(-4, 4, 0), NULL, NULL);
 
 	pXent_setcollisionflag(ranger->chassis, NULL, NX_NOTIFY_ON_START_TOUCH);
-	ranger->chassis->event = RangerBreak;
+	ranger->chassis->event = EventChassis;
 	
 	pXent_setcollisionflag(ranger->wheel[1], NULL, NX_NOTIFY_ON_TOUCH);
-	ranger->wheel[1]->event = RangerGroundContact;
+	ranger->wheel[1]->event = EventWheel;
 	
 	pXent_setcollisionflag(ranger->wheel[0], NULL, NX_NOTIFY_ON_TOUCH);
-	ranger->wheel[0]->event = RangerGroundContact;
+	ranger->wheel[0]->event = EventWheel;
+	
+	ranger->antenna[0]->event = EventAntenna;
+	ranger->antenna[1]->event = EventAntenna;
+	ranger->antenna[2]->event = EventAntenna;
 	
 	vec_fill(&ranger->wheel[0]->scale_x, 1);
 	vec_fill(&ranger->wheel[1]->scale_x, 1);
 	
 	ranger->active = 1;
-	ranger->direction = 1;
+	ranger->direction = -1;
 	ranger->speed = 0;
 	
-	ranger->traction = ranger->wheel[1];
+	ranger->traction = ranger->wheel[0];
 	
 	sndEngine = snd_loop(wavEngine, 50, 0);
 
 }
 
-function RaceStart ()
+/*******************************************************************************************/
+
+void RaceStart ()
 {
-	wait(2);
-	level_load("resources\\ulevel.wmb");
-	wait(3);
+	str_cpy(strLevel, "resources\\");
+	str_cat(strLevel, (txtLevels->pstring)[txtLevels->skill_x]);
+	level_load(strLevel);
 
 	reset(camera, ISOMETRIC);
-	
-	RangerCreate ();
+	camera->x = 2000;
+	camera->pan = 180;
 	
 	var ArcNew = 0;
 	var Aceleracion = 10;
@@ -341,8 +462,12 @@ function RaceStart ()
 	on_space = RangerFlip;
 	on_enter = RangerBreak;
 	
-	while(1)
+	while(!key_esc)
 	{
+		DEBUG_VAR(goalCount, 400);
+		
+		physX_run(time_frame / 16);
+		
 		VECTOR vSpeed;
 		
 		if(ranger->active)
@@ -376,8 +501,10 @@ function RaceStart ()
 			{
 				ranger->speed = maxv(ranger->speed -(time_step * Aceleracion * 10), 0);
 				
-				pXent_setangvelocity(ranger->wheel[1], vector(ranger->speed * 15 * ranger->direction, 0, 0));
-				pXent_setangvelocity(ranger->wheel[0], vector(ranger->speed * 15 * ranger->direction, 0, 0));
+				if(ranger->traction == ranger->wheel[1])
+					pXent_setangvelocity(ranger->wheel[0], vector(ranger->speed * 15 * ranger->direction, 0, 0));
+				else
+					pXent_setangvelocity(ranger->wheel[1], vector(ranger->speed * 15 * ranger->direction, 0, 0));
 			}
 			else
 			{
@@ -396,7 +523,11 @@ function RaceStart ()
 				snd_tune(sndEngine, 50, 50 + maxv(vSpeed.x / 30 ,ranger->speed * 5), 0);
 			
 			if(key_force.x)
-				pXent_addtorquelocal(ranger->chassis, vector(key_force.x * time_step * 13, 0, 0));
+				pXent_addtorquelocal(ranger->chassis, vector(key_force.x * time_step * -13, 0, 0));
+		}
+		else
+		{
+			break;
 		}
 		
 		pXent_getvelocity(ranger->chassis, &vSpeed, nullvector);
@@ -411,15 +542,18 @@ function RaceStart ()
 		ranger->inContact = maxv(ranger->inContact - time_step, 0);
 		
 		wait(1);
-	}	
+	}
+//	if(snd_playing(sndEngine))
+//		snd_stop(sndEngine);
+//	sndEngine = NULL;
 }
 
-function ButtonExit ()
+var ButtonExit ()
 {
 	sys_exit(NULL);
 }
 
-function ButtonPlay ()
+var ButtonPlay ()
 {
 	reset(panTitle, SHOW);
 	reset(panMain, SHOW);
@@ -431,91 +565,244 @@ function ButtonPlay ()
 
 var buttonActive = 0;
 
-function ButtonOver(var _button, PANEL *_panel)
+var ButtonOver(var _button, PANEL *_panel)
 {
 	if(buttonActive == _button) return;
 	buttonActive = _button;
 	
 	snd_play(wavButtonOver, 50, 0);
 	
-	//printf("%.0f", (double)_button);
-	
-	var Timer = 4;
-	while(Timer > 0)
+	var timer = 4;
+	while(timer > 0)
 	{
-		var offset = random(Timer)-(Timer/2);
-		if(_button == 1)
-			pan_setbutton(_panel, 1, 0, offset,       0, bmpPlayOn,   bmpPlayOff,   bmpPlayOn,   bmpPlayOn,  ButtonPlay, NULL, ButtonOver);
-		if(_button == 2)
-			pan_setbutton(_panel, 2, 0, 171 + offset, 0, bmpEditorOn, bmpEditorOff, bmpEditorOn, bmpEditorOn,NULL,       NULL, ButtonOver);
-		if(_button == 3)
-			pan_setbutton(_panel, 3, 0, 342 + offset, 0, bmpExitOn,   bmpExitOff,   bmpExitOn,   bmpExitOn,  ButtonExit, NULL, ButtonOver);
+		var offset = random(timer)-(timer/2);
+		if(_button == MAIN_PLAY)
+			pan_setbutton(_panel, 1, 0, MAIN_PLAY_POS + offset,   0, bmpPlayOn,   bmpPlayOff,   bmpPlayOn,   bmpPlayOn,   ButtonPlay, NULL, ButtonOver);
+//		if(_button == MAIN_EDITOR)
+//			pan_setbutton(_panel, 2, 0, MAIN_EDITOR_POS + offset, 0, bmpEditorOn, bmpEditorOff, bmpEditorOn, bmpEditorOn, NULL,       NULL, ButtonOver);
+		if(_button == MAIN_EXIT)
+			pan_setbutton(_panel, 3, 0, MAIN_EXIT_POS + offset,   0, bmpExitOn,   bmpExitOff,   bmpExitOn,   bmpExitOn,   ButtonExit, NULL, ButtonOver);
 			
-		Timer -= time_step;
+		timer -= time_step;
 		wait(1);
 	}
 	
 	if(_button == 1)
-		pan_setbutton(_panel, 1, 0, 0,  0, bmpPlayOn,   bmpPlayOff,   bmpPlayOn,   bmpPlayOn,   ButtonPlay, NULL, ButtonOver);
-	if(_button == 2)
-		pan_setbutton(_panel, 2, 0, 171,0, bmpEditorOn, bmpEditorOff, bmpEditorOn, bmpEditorOn, NULL,       NULL, ButtonOver);
+		pan_setbutton(_panel, 1, 0, MAIN_PLAY_POS,   0, bmpPlayOn,   bmpPlayOff,   bmpPlayOn,   bmpPlayOn,   ButtonPlay, NULL, ButtonOver);
+//	if(_button == 2)
+//		pan_setbutton(_panel, 2, 0, MAIN_EDITOR_POS, 0, bmpEditorOn, bmpEditorOff, bmpEditorOn, bmpEditorOn, NULL,       NULL, ButtonOver);
 	if(_button == 3)
-		pan_setbutton(_panel, 3, 0, 342,0, bmpExitOn,   bmpExitOff,   bmpExitOn,   bmpExitOn,   ButtonExit, NULL, ButtonOver);
+		pan_setbutton(_panel, 3, 0, MAIN_EXIT_POS,   0, bmpExitOn,   bmpExitOff,   bmpExitOn,   bmpExitOn,   ButtonExit, NULL, ButtonOver);
 	
 	if(buttonActive == _button)
 		buttonActive = 0;
 	
 }
 
-void WindowInit ()
+/*******************************************************************************************/
+
+void MainMenu()
 {
-	video_window(NULL, NULL, 1, "Mars Ranger");
-	video_set(sys_metrics(0), sys_metrics(1), 32, 2);
+	if(snd_playing(sndEngine))
+		snd_stop(sndEngine);
+	sndEngine = NULL;
 	
-	mouse_pointer = 0;
+	level_load("");
+	wait(1);
+	on_esc = NULL;
+	
+	// Background setup
+	vec_set(&sky_color, vector(67, 127, 207));
+	
+	// Camera setup
+	camera->x = 500;
+	camera->y = 0;
+	camera->z = 0;
+	camera->pan = 180;
+	set(camera, ISOMETRIC);
+	camera->arc = (1024 / screen_size.x) * 50;
+	
+	// Create background
+	you = ent_create("resources\\models\\plane.mdl", nullvector, NULL);
+	you->material = mtlPerpective;
+	you->pan = 180;
+	
+	// Show title
+	panTitle->pos_x = (screen_size.x / 2) - 256;
+	panTitle->pos_y = (screen_size.y / 2) - 134;
+	set(panTitle, SHOW);
+	
+	// Show main buttons
+	panMain->pos_x = (screen_size.x / 2) - 256;
+	panMain->pos_y = (screen_size.y / 2) + 16;
+	set(panMain, SHOW);
+	
+	// Set mouse over the play button
+	SetCursorPos(window_pos.x + panMain->pos_x + 85, window_pos.y + panMain->pos_y + 25);
+	mouse_mode = 4;
+	mouse_map = bmpArrow;
+}
+
+/*******************************************************************************************/
+
+void* NxPhysicsSDK = NULL;
+
+void LevelLoad()
+{
+	if(!NxPhysicsSDK) 
+		return;
+	
+	if(level_ent)
+		pXent_settype(level_ent, PH_STATIC, PH_POLY);
+	
+	ENTITY *entStart = NULL;
+	entGoal = NULL;
+	goalCount = 0;
+	
+	for (you = ent_next(NULL); you; you = ent_next(you))
+	{
+		if(you->flags & PASSABLE) 
+			continue;
+		
+		var type = ent_type(you);
+		
+		if(type < 2 && type > 5)  // blocks, models, or terrain only 
+			continue;
+		
+		if(type == 5) // model
+		{
+			if(you->emask & DYNAMIC) 
+				continue;	// only register static models)
+			
+			if(str_stri(you->link.name, "start_mdl"))
+			{
+				if(entStart)
+				{
+					printf("ERROR\nMore than one start point!");
+					
+					MainMenu();
+					return;
+				}
+				
+				entStart = you;
+				continue;
+			}
+			else if(str_stri(you->link.name, "end_mdl"))
+			{
+				goalCount += 1;
+				you->parent = entGoal;
+				entGoal = you;
+			}
+		}
+		
+		if(type == 4)
+			pXent_settype(you, PH_STATIC, PH_TERRAIN);
+		else	
+			pXent_settype(you, PH_STATIC, PH_POLY);
+	}
+	
+	if(entStart)
+	{
+		RangerCreate(vector(0, entStart->y, entStart->z));
+		ent_remove(entStart);
+		
+		ENTITY *_ent = entGoal;
+		for(; _ent; _ent = _ent->parent)
+		{
+			pXent_setcollisionflag(ranger->chassis,  _ent, NX_NOTIFY_ON_START_TOUCH);
+			pXent_setcollisionflag(ranger->wheel[0], _ent, NX_NOTIFY_ON_START_TOUCH);
+			pXent_setcollisionflag(ranger->wheel[1], _ent, NX_NOTIFY_ON_START_TOUCH);
+			pXent_setcollisionflag(ranger->antenna[0], _ent, NX_NOTIFY_ON_START_TOUCH);
+			pXent_setcollisionflag(ranger->antenna[1], _ent, NX_NOTIFY_ON_START_TOUCH);
+			pXent_setcollisionflag(ranger->antenna[2], _ent, NX_NOTIFY_ON_START_TOUCH);
+			
+			_ent->skill99 = 1;
+		}
+		
+		on_esc = MainMenu;
+	}
 	
 }
 
-void PhysXInit ()
+void EntityRemove(ENTITY* ent)
 {
-	physX_open ();
+	if(!NxPhysicsSDK) 
+		return;
+	if(ent->body) 
+		pXent_settype(ent, 0, 0);		
+}
+
+/*******************************************************************************************/
+
+void WindowClose()
+{
+	// Close PhysX
+	physX_destroy();
+	NxPhysicsSDK = NULL;
+}
+
+void WindowInit ()
+{
+	// Engine setup
+	mouse_pointer = 0;
 	
+	// Window setup
+	video_window(NULL, NULL, 1, "Mars Ranger");
+	video_set(sys_metrics(0), sys_metrics(1), 32, 2);
+	
+	// Load PhysX
+	NxPhysicsSDK = physX_load();
+	physX_run(0);
+	
+	// PhysX setup
 	pX_setsteprate(120, 128, NX_TIMESTEP_FIXED);
 	pX_setgravity(vector(0, 0, -9.8));
 	pX_setunit(0.01);
 	pX_setccd(1);
 	
+	// List of levels
+	txt_for_dir(txtLevels, "resources\\*.wmb");
+	
+	// Events
+	on_exit = WindowClose;
+	on_level_load = LevelLoad;
+	on_ent_remove = EntityRemove;
 }
 
-void main ()
+/*******************************************************************************************/
+
+void Intro()
 {
-	WindowInit();
-	
-	PhysXInit();
-	
-	wait(2);
-	
 	level_load("");
 	wait(1);
+	on_esc = NULL;
 	
+	// Background setup
 	vec_set(&sky_color, vector(67, 127, 207));
-	camera->arc = (1024 / screen_size.x) * 50;
 	
-	camera->x = -500;
+	// Camera setup
+	camera->x = 500;
 	camera->y = 0;
 	camera->z = 0;
+	camera->pan = 180;
 	set(camera, ISOMETRIC);
+	camera->arc = (1024 / screen_size.x) * 50;
 	
+	// Create background
 	you = ent_create("resources\\models\\plane.mdl", nullvector, NULL);
 	you->material = mtlPerpective;
+	you->pan = 180;
 	
+	// Show title
 	panTitle->pos_x = (screen_size.x / 2) - 256;
 	panTitle->pos_y = (screen_size.y / 2) - 134;
 	set(panTitle, SHOW);
 	
+	// Play sounds
 	var sndIntro = snd_play(wavIntro, 50, 0);
 	sndAmbient = snd_loop(wavAmbient, 50, 0);
 	
+	// Fade in
 	var translucency = 100;
 	while(translucency > 0)
 	{
@@ -524,23 +811,26 @@ void main ()
 		wait (1);
 	}
 	
+	// Wait until intro sound ends
 	while(snd_playing(sndIntro)) 
 		wait(1);
 	
+	// Show main buttons
 	panMain->pos_x = (screen_size.x / 2) - 256;
 	panMain->pos_y = (screen_size.y / 2) + 16;
 	set(panMain, SHOW);
 	
-	
+	// Set mouse over the play button
 	SetCursorPos(window_pos.x + panMain->pos_x + 85, window_pos.y + panMain->pos_y + 25);
 	mouse_mode = 4;
 	mouse_map = bmpArrow;
-	
-	while(!key_esc)
-	{
-		wait(1);
-	}
-	
-	sys_exit(NULL);
+}
+
+/*******************************************************************************************/
+
+void main ()
+{
+	WindowInit();
+	Intro();
 }
 

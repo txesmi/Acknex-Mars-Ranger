@@ -4,3 +4,9 @@
 
 /.vs
 /MarsRanger/acklog.txt
+*.$$M
+*.$$w
+*.bak
+*.raw
+*.wed
+*.fxo
