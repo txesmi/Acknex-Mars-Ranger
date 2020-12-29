@@ -1,13 +1,11 @@
 float4x4 matWorld;
 float4x4 matWorldViewProj;
 
-float4 vecTime; // Variable tiempo pasada por acknex
-float4 vecSkill41; // Variable tiempo pasada por acknex
-float vecFog; // Vector de color de la niebla
+float4 vecTime;
 
-texture entSkin1; // Textura de la entidad
+texture entSkin1;
 
-sampler Mascara = sampler_state  // Sampleo de la textura de máscara
+sampler smpSkin1 = sampler_state
 {
 	Texture = <entSkin1>;
 	MipFilter = Linear;
@@ -15,56 +13,52 @@ sampler Mascara = sampler_state  // Sampleo de la textura de máscara
 	Addressv = Wrap;
 };
 
+//////////////////////////////////////////////////////////////////
 
-struct out_agua // Estructura de salida de datos
+struct in_vs
 {
 	float4 Pos	: POSITION;
-	float  Fog	: FOG;
+	float2 Tex0	: TEXCOORD0;
+};
+
+struct out_vs
+{
+	float4 Pos	: POSITION;
 	float2 Tex0	: TEXCOORD0;
 	float2 Pos0	: TEXCOORD1;
 };
 
-out_agua vs_agua20 // Vertex Shader
-(
-	in float4 inPos		: POSITION,
-	in float3 inNormal	: NORMAL,
-	in float2 inTex0	: TEXCOORD0
-)
+out_vs VS (in_vs In) 
 {
-	out_agua Out; // Estructura de salida
+	out_vs Out;
 	
-	Out.Pos = mul(inPos,matWorldViewProj); // Posición del vértice
+	Out.Pos = mul(In.Pos,matWorldViewProj);
+	Out.Tex0 = In.Tex0;
+	Out.Pos0 = Out.Pos;
 	
-	Out.Pos0 = mul(inPos,matWorldViewProj); // Posición del vértice
-	
-	Out.Fog = vecFog; // Intensidad de la niebla
-	
-	Out.Tex0 = inTex0; // Coordenadas de la textura
-	
-	return Out; // Respuesta
+	return Out; 
 }
 	
-float4 ps_agua20(out_agua In): COLOR // Pixel Shader
+float4 PS(out_vs In): COLOR0
 {
-	// Máscara 1
-	float2 Coord1 = In.Tex0.xy; // Coordenadas modificadas en base al tiempo
+	float2 Coord1 = In.Tex0.xy;
 	Coord1.x += vecTime.w * 0.0002f;
 	Coord1.x += In.Pos0.x * In.Pos0.y * 0.1f;
-	float4 Tex = tex2D ( Mascara, Coord1 ); // Color del punto en la textura
+	float4 Tex = tex2D(smpSkin1, Coord1);
 	
-	//Tex.xyz =  abs(In.Pos0.x);
 	Tex.a = 1;
 	return Tex;
 }
 
 //////////////////////////////////////////////////////////////////
-	technique agua
-	{
-		pass one
-		{
-			VertexShader = compile vs_2_0 vs_agua20();
-			PixelShader = compile ps_2_0 ps_agua20();			
-		}		
-	}
 
-	technique fallback { pass one { } }
+technique
+{
+	pass one
+	{
+		VertexShader = compile vs_2_0 VS();
+		PixelShader = compile ps_2_0 PS();			
+	}		
+}
+
+technique fallback { pass one { } }

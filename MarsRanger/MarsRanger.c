@@ -14,6 +14,74 @@ void RaceStart ();
 
 /*******************************************************************************************/
 
+typedef struct {
+	long offset; // offset of the list from the start of the WMB file, in bytes
+	long length; // length of the list, in bytes
+} LIST;
+
+typedef struct {  
+	char version[4]; // "WMB7"  
+	LIST palettes;// WMB1..6 only
+	LIST legacy1; // WMB1..6 only
+	LIST textures;// textures list  
+	LIST legacy2; // WMB1..6 only
+	LIST pvs;     // BSP only 
+	LIST bsp_nodes; // BSP only 
+	LIST materials; // material names
+	LIST legacy3; // WMB1..6 only
+	LIST legacy4; // WMB1..6 only
+	LIST aabb_hulls; // WMB1..6 only
+	LIST bsp_leafs;  // BSP only 
+	LIST bsp_blocks; // BSP only 
+	LIST legacy5; // WMB1..6 only
+	LIST legacy6; // WMB1..6 only
+	LIST legacy7; // WMB1..6 only
+	LIST objects; // entities, paths, sounds, etc.
+	LIST lightmaps; // lightmaps for blocks
+	LIST blocks;  // block meshes
+	LIST legacy8; // WMB1..6 only
+	LIST lightmaps_terrain; // lightmaps for terrains
+} WMB_HEADER;
+
+
+void WmbLoad(STRING *filename)
+{
+	long _size;
+	BYTE *_buf = file_load(filename->chars, NULL, &_size);
+}
+
+FONT *fntScores = "Arial#32";
+
+var highscore = 0;
+
+PANEL *panHighScores =
+{
+	digits(0, 0,   "%.3f", fntScores, 1, highscore);
+	
+	pos_x = 100;
+	
+	flags = SHOW;
+}
+
+void HighScoreGet(STRING *_filename)
+{
+	long _size;
+	WMB_HEADER *_header = file_load(_filename->chars, NULL, &_size);
+	memcpy(&highscore, &_header->legacy2.length, sizeof(var));
+	file_load(NULL, _header, &_size);
+}
+
+void HighScoreSet(STRING *_filename, var _score)
+{
+	long _size;
+	WMB_HEADER *_header = file_load(_filename->chars, NULL, &_size);
+	memcpy(&_header->legacy2.length, &_score, sizeof(var));
+	file_save(_filename->chars, _header, _size);
+	file_load(NULL, _header, &_size);
+}
+
+/*******************************************************************************************/
+
 SOUND *wavEngine = "resources\\sounds\\engine.wav";
 var sndEngine = 0;
 SOUND *wavCrash = "resources\\sounds\\crash.wav";
@@ -38,7 +106,7 @@ BMAP *bmpExitOn = "resources\\images\\exit_on.tga";
 
 PANEL *panTitle =
 {
-	window(0, 0, 512, 128, bmpTitle, NULL, NULL);
+	bmap = bmpTitle;
 }
 
 #define MAIN_PLAY   1
@@ -56,6 +124,8 @@ PANEL *panMain =
 	button(342, 0, bmpExitOn,    bmpExitOff,   bmpExitOn,    ButtonExit, NULL, ButtonOver);
 }
 
+/*******************************************************************************************/
+
 TEXT *txtLevels =
 {
 	pos_x = 10;
@@ -67,8 +137,22 @@ TEXT *txtLevels =
 }
 
 STRING *strLevel = "";
+
+/*******************************************************************************************/
+
 int goalCount = 0;
 ENTITY *entGoal = NULL;
+
+var gTimer = 0;
+
+FONT *fntTimer = "Arial#40";
+
+PANEL *panTimer =
+{
+	digits(0, 0, "%.3f", fntTimer, 1, gTimer);
+	
+	flags = CENTER_X;
+}
 
 /*******************************************************************************************/
 
@@ -111,16 +195,37 @@ RANGER *ranger =
 
 /*******************************************************************************************/
 
+void GoalHit()
+{
+	goalCount -= 1;
+	if(goalCount > 0)
+		return;
+	
+	wait(1);
+	
+	txtLevels->skill_x += 1;
+	if(txtLevels->skill_x >= txtLevels->skill_y)
+		txtLevels->skill_x = 0;
+	
+	RangerBreak();
+	
+	if(gTimer < highscore)
+	{
+		HighScoreSet(strLevel, gTimer);
+	}
+	
+}
+
 void EventChassis()
 {
-	ENTITY *ent = NULL;
+	ENTITY *_ent = NULL;
 	if(you)
 	{
 		if((you->skill99 > 0) && (you->body))
 		{
 			pXent_settype(you, 0, 0);
-			ent = you;
-			goalCount -= 1;
+			_ent = you;
+			GoalHit();
 		}
 		else
 		{
@@ -131,8 +236,8 @@ void EventChassis()
 
 	wait(1);
 	
-	if(ent)
-		ent_remove(ent);
+	if(_ent)
+		ent_remove(_ent);
 }
 
 void EventWheel()
@@ -144,7 +249,7 @@ void EventWheel()
 		{
 			pXent_settype(you, 0, 0);
 			ent = you;
-			goalCount -= 1;
+			GoalHit();
 		}
 		else
 		{
@@ -169,7 +274,7 @@ void EventAntenna()
 		{
 			pXent_settype(you, 0, 0);
 			ent = you;
-			goalCount -= 1;
+			GoalHit();
 		}
 	}
 	wait(1);
@@ -201,37 +306,35 @@ void RangerFlip ()
 	pXent_settype(ranger->antenna[1], 0, PH_BOX);
 	pXent_settype(ranger->antenna[2], 0, PH_BOX);
 	
-	//wait(1);
+	VECTOR _vPos;
 	
-	VECTOR vPos;
-	
-	vec_set(&vPos, vector(0, -70 * ranger->direction, 40));
-	vec_rotateaxis(&vPos, vector(1, 0, 0), ranger->chassis->roll);
-	vec_add(&vPos, &ranger->chassis->x);
-	vec_set(&ranger->antenna[0]->x, &vPos);
+	vec_set(&_vPos, vector(0, -70 * ranger->direction, 40));
+	vec_rotateaxis(&_vPos, vector(1, 0, 0), ranger->chassis->roll);
+	vec_add(&_vPos, &ranger->chassis->x);
+	vec_set(&ranger->antenna[0]->x, &_vPos);
 	vec_set(&ranger->antenna[0]->pan, &ranger->chassis->pan);
 	pXent_settype(ranger->antenna[0], PH_RIGID, PH_BOX);
 	pXcon_add(PH_HINGE, ranger->antenna[0], ranger->chassis, 0);
-	vec_set(&vPos, vector(0, -70 * ranger->direction, 10));
-	vec_rotateaxis(&vPos, vector(1, 0, 0), ranger->chassis->roll);
-	vec_add(&vPos, &ranger->chassis->x);
-	pXcon_setparams1(ranger->antenna[0], &vPos, vector(1, 0, 0), vector(50000, 1, 0));
+	vec_set(&_vPos, vector(0, -70 * ranger->direction, 10));
+	vec_rotateaxis(&_vPos, vector(1, 0, 0), ranger->chassis->roll);
+	vec_add(&_vPos, &ranger->chassis->x);
+	pXcon_setparams1(ranger->antenna[0], &_vPos, vector(1, 0, 0), vector(50000, 1, 0));
 	pXcon_setparams2(ranger->antenna[0], vector(0, 0, 0), NULL, NULL);
 	
-	vec_set(&vPos, vector(0,-70 * ranger->direction, 70));
-	vec_rotateaxis(&vPos, vector(1,0,0), ranger->chassis->roll);
-	vec_add(&vPos, &ranger->chassis->x);
-	vec_set(&ranger->antenna[1]->x, &vPos);
+	vec_set(&_vPos, vector(0,-70 * ranger->direction, 70));
+	vec_rotateaxis(&_vPos, vector(1,0,0), ranger->chassis->roll);
+	vec_add(&_vPos, &ranger->chassis->x);
+	vec_set(&ranger->antenna[1]->x, &_vPos);
 	vec_set(&ranger->antenna[1]->pan, &ranger->chassis->pan);
 	pXent_settype(ranger->antenna[1], PH_RIGID, PH_BOX);
 	pXcon_add(PH_HINGE, ranger->antenna[1], ranger->antenna[0], 0);
 	pXcon_setparams1(ranger->antenna[1], vector(0, ranger->antenna[1]->y, ranger->antenna[0]->z), vector(1, 0, 0), NULL);
 	pXcon_setparams2(ranger->antenna[1], vector(-2, 2, 0), NULL, NULL);
 	
-	vec_set(&vPos, vector(0, -70 * ranger->direction, 100));
-	vec_rotateaxis(&vPos, vector(1,0,0), ranger->chassis->roll);
-	vec_add(&vPos, &ranger->chassis->x);
-	vec_set(&ranger->antenna[2]->x, &vPos);
+	vec_set(&_vPos, vector(0, -70 * ranger->direction, 100));
+	vec_rotateaxis(&_vPos, vector(1,0,0), ranger->chassis->roll);
+	vec_add(&_vPos, &ranger->chassis->x);
+	vec_set(&ranger->antenna[2]->x, &_vPos);
 	vec_set(&ranger->antenna[2]->pan, &ranger->chassis->pan);
 	pXent_settype(ranger->antenna[2], PH_RIGID, PH_BOX);
 	pXcon_add(PH_HINGE, ranger->antenna[2], ranger->antenna[1], 0);
@@ -287,11 +390,11 @@ void RangerBreak ()
 	pXent_setgroup(ranger->antenna[1], 3);
 	pXent_setgroup(ranger->antenna[2], 3);
 	
-	var timer = 16;
-	while(timer > 0)
+	var _timer = 16;
+	while(_timer > 0)
 	{
 		physX_run(time_frame / 16);
-		timer -= time_step;
+		_timer -= time_step;
 		wait(1);
 	}
 
@@ -312,31 +415,27 @@ void RangerBreak ()
 	RaceStart ();
 }
 
-//void RangerGroundContact ()
-//{
-//	if(ranger->traction == me)
-//		ranger->inContact = 1;
-//}
-
-void RangerCreate (VECTOR *_vPos)
+void RangerCreate (VECTOR *vPos)
 {
-	ranger->chassis  = ent_create("resources\\models\\bar.mdl",   _vPos, NULL);
-	_vPos->y += 110;
-	_vPos->z -= 70;
-
-	ranger->wheel[0] = ent_create("resources\\models\\wheel.mdl", _vPos, NULL);
+	VECTOR _vPos;
+	vec_set(&_vPos, vPos);
 	
-	_vPos->y -= 220;
-	ranger->wheel[1] = ent_create("resources\\models\\wheel.mdl", _vPos, NULL);
+	ranger->chassis  = ent_create("resources\\models\\bar.mdl",   &_vPos, NULL);
 	
-	VECTOR vPos;
-	vec_set(&vPos, vector(0, -70, 40));
-	vec_add(&vPos, &ranger->chassis->x);
-	ranger->antenna[0] = ent_create("resources\\models\\antena.mdl", &vPos, NULL);
-	vPos.z += 30;
-	ranger->antenna[1] = ent_create("resources\\models\\antena.mdl", &vPos, NULL);
-	vPos.z += 30;
-	ranger->antenna[2] = ent_create("resources\\models\\antena.mdl", &vPos, NULL);
+	_vPos.y += 110;
+	_vPos.z -= 70;
+	ranger->wheel[0] = ent_create("resources\\models\\wheel.mdl", &_vPos, NULL);
+	
+	_vPos.y -= 220;
+	ranger->wheel[1] = ent_create("resources\\models\\wheel.mdl", &_vPos, NULL);
+	
+	vec_set(&_vPos, vector(0, -70, 40));
+	vec_add(&_vPos, &ranger->chassis->x);
+	ranger->antenna[0] = ent_create("resources\\models\\antena.mdl", &_vPos, NULL);
+	_vPos.z += 30;
+	ranger->antenna[1] = ent_create("resources\\models\\antena.mdl", &_vPos, NULL);
+	_vPos.z += 30;
+	ranger->antenna[2] = ent_create("resources\\models\\antena.mdl", &_vPos, NULL);
 	
 	vec_fill(&ranger->wheel[0]->scale_x, 1.3);
 	vec_fill(&ranger->wheel[1]->scale_x, 1.3);
@@ -450,20 +549,32 @@ void RaceStart ()
 	str_cpy(strLevel, "resources\\");
 	str_cat(strLevel, (txtLevels->pstring)[txtLevels->skill_x]);
 	level_load(strLevel);
+	
+	HighScoreGet(strLevel);
+	if(highscore < 1)
+		highscore = 999999;
+	
 
 	reset(camera, ISOMETRIC);
 	camera->x = 2000;
 	camera->pan = 180;
 	
-	var ArcNew = 0;
-	var Aceleracion = 10;
-	var OverEngine = 0;
+	var _timeStart = total_ticks;
+	gTimer = 0;
+	panTimer->pos_x = screen_size.x / 2;
+	panTimer->pos_y = screen_size.y - 60;
+	set(panTimer, SHOW);
+	
+	var _arcNew = 0;
+	var _acceleration = 10;
+//	var _runOut = 0;
 	
 	on_space = RangerFlip;
 	on_enter = RangerBreak;
 	
 	while(!key_esc)
 	{
+		gTimer = (total_ticks - _timeStart) / 16.0;
 		DEBUG_VAR(goalCount, 400);
 		
 		physX_run(time_frame / 16);
@@ -472,6 +583,12 @@ void RaceStart ()
 		
 		if(ranger->active)
 		{
+			if(ranger->chassis->z < level_ent->min_z)
+			{
+				RangerBreak();
+				break;
+			}
+			
 			pXent_getangvelocity(ranger->traction, &vSpeed);
 			
 			if(key_force.y > 0)
@@ -480,26 +597,26 @@ void RaceStart ()
 				{
 					if(!key_shift)
 					{
-						ranger->speed = minv(ranger->speed + time_step * Aceleracion, 100);
+						ranger->speed = minv(ranger->speed + time_step * _acceleration, 100);
 						pXent_addtorquelocal(ranger->traction, vector(ranger->speed * time_step * ranger->direction, 0, 0));
 					}
 					else
 					{
-						ranger->speed = minv(ranger->speed + time_step * Aceleracion * 0.1, 10);
+						ranger->speed = minv(ranger->speed + time_step * _acceleration * 0.1, 10);
 						pXent_setangvelocity(ranger->traction, vector(ranger->speed * 15 * ranger->direction, 0, 0));
 					}
 				}
 				
-				if(ranger->speed > 300)
-					OverEngine += time_step;
-				
-				if(OverEngine > 32)
-					RangerBreak ();
+//				if(ranger->speed > 300)
+//					_runOut += time_step;
+//				
+//				if(_runOut > 32)
+//					RangerBreak ();
 				
 			}
 			else if(key_force.y < 0)
 			{
-				ranger->speed = maxv(ranger->speed -(time_step * Aceleracion * 10), 0);
+				ranger->speed = maxv(ranger->speed -(time_step * _acceleration * 10), 0);
 				
 				if(ranger->traction == ranger->wheel[1])
 					pXent_setangvelocity(ranger->wheel[0], vector(ranger->speed * 15 * ranger->direction, 0, 0));
@@ -509,9 +626,9 @@ void RaceStart ()
 			else
 			{
 				if(ranger->direction > 0)
-					ranger->speed = maxv(ranger->speed -(time_step * Aceleracion), 0);
+					ranger->speed = maxv(ranger->speed -(time_step * _acceleration), 0);
 				else
-					ranger->speed = maxv(ranger->speed -(time_step * Aceleracion * 0.1), 0);
+					ranger->speed = maxv(ranger->speed -(time_step * _acceleration * 0.1), 0);
 				
 				pXent_setangvelocity(ranger->traction, vector(maxv(abs(vSpeed.x), ranger->speed * 15) * ranger->direction, 0, 0));
 			}
@@ -532,8 +649,8 @@ void RaceStart ()
 		
 		pXent_getvelocity(ranger->chassis, &vSpeed, nullvector);
 		
-		ArcNew = minv(60 + vec_length(&vSpeed) / 50, 100);
-		camera->arc -= (camera->arc - ArcNew) * time_step * 0.1;
+		_arcNew = minv(60 + vec_length(&vSpeed) / 50, 100);
+		camera->arc -= (camera->arc - _arcNew) * time_step * 0.1;
 		
 		camera->z = ranger->chassis->z;
 		camera->y = ranger->chassis->y;
@@ -606,6 +723,8 @@ void MainMenu()
 	if(snd_playing(sndEngine))
 		snd_stop(sndEngine);
 	sndEngine = NULL;
+	
+	reset(panTimer, SHOW);
 	
 	level_load("");
 	wait(1);
@@ -716,6 +835,9 @@ void LevelLoad()
 			pXent_setcollisionflag(ranger->antenna[1], _ent, NX_NOTIFY_ON_START_TOUCH);
 			pXent_setcollisionflag(ranger->antenna[2], _ent, NX_NOTIFY_ON_START_TOUCH);
 			
+			pXent_setgroup(_ent, 3);
+			
+			
 			_ent->skill99 = 1;
 		}
 		
@@ -761,7 +883,7 @@ void WindowInit ()
 	pX_setccd(1);
 	
 	// List of levels
-	txt_for_dir(txtLevels, "resources\\*.wmb");
+	txtLevels->skill_y = txt_for_dir(txtLevels, "resources\\*.wmb");
 	
 	// Events
 	on_exit = WindowClose;
@@ -774,7 +896,7 @@ void WindowInit ()
 void Intro()
 {
 	level_load("");
-	wait(1);
+	
 	on_esc = NULL;
 	
 	// Background setup
