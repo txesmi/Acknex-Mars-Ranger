@@ -11,4 +11,8 @@ space -> flip
 
 enter -> restart
 
+page up -> load next level
+
+page down -> load previous level
+
 escape -> exit
