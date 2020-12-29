@@ -44,24 +44,7 @@ typedef struct {
 } WMB_HEADER;
 
 
-void WmbLoad(STRING *filename)
-{
-	long _size;
-	BYTE *_buf = file_load(filename->chars, NULL, &_size);
-}
-
-FONT *fntScores = "Arial#32";
-
 var highscore = 0;
-
-PANEL *panHighScores =
-{
-	digits(0, 0,   "%.3f", fntScores, 1, highscore);
-	
-	pos_x = 100;
-	
-	flags = SHOW;
-}
 
 void HighScoreGet(STRING *_filename)
 {
@@ -73,6 +56,7 @@ void HighScoreGet(STRING *_filename)
 
 void HighScoreSet(STRING *_filename, var _score)
 {
+	highscore = _score;
 	long _size;
 	WMB_HEADER *_header = file_load(_filename->chars, NULL, &_size);
 	memcpy(&_header->legacy2.length, &_score, sizeof(var));
@@ -133,7 +117,7 @@ TEXT *txtLevels =
 	
 	strings = 1024;
 	
-	flags = SHOW;
+	//flags = SHOW;
 }
 
 STRING *strLevel = "";
@@ -144,15 +128,29 @@ int goalCount = 0;
 ENTITY *entGoal = NULL;
 
 var gTimer = 0;
+var gTimerLast = 0;
 
+FONT *fntTitle = "Arial#24b";
+FONT *fntStats = "Arial#20";
 FONT *fntTimer = "Arial#40";
 
-PANEL *panTimer =
+PANEL *panLevel =
 {
-	digits(0, 0, "%.3f", fntTimer, 1, gTimer);
+	pos_x = 10;
+	pos_y = 10;
+	digits(0, 0, strLevel, fntTitle, 1, NULL);
+	digits(10, 30, "Best:   %6.3f", fntStats, 1, highscore);
+	digits(10, 50, "Last:   %6.3f", fntStats, 1, gTimerLast);
+	digits(140, 30, "%6.3f", fntTimer, 1, gTimer);
 	
-	flags = CENTER_X;
 }
+
+//PANEL *panTimer =
+//{
+//	digits(0, 0, "%6.3f", fntTimer, 1, gTimer);
+//	
+//	//flags = CENTER_X;
+//}
 
 /*******************************************************************************************/
 
@@ -203,9 +201,9 @@ void GoalHit()
 	
 	wait(1);
 	
-	txtLevels->skill_x += 1;
-	if(txtLevels->skill_x >= txtLevels->skill_y)
-		txtLevels->skill_x = 0;
+//	txtLevels->skill_x += 1;
+//	if(txtLevels->skill_x >= txtLevels->skill_y)
+//		txtLevels->skill_x = 0;
 	
 	RangerBreak();
 	
@@ -213,6 +211,8 @@ void GoalHit()
 	{
 		HighScoreSet(strLevel, gTimer);
 	}
+	
+	gTimerLast = gTimer;
 	
 }
 
@@ -372,6 +372,11 @@ void RangerBreak ()
 	if(!ranger->active) 
 		return;
 	ranger->active = 0;
+	
+	on_space = NULL;
+	on_enter = NULL;
+	on_pgup = NULL;
+	on_pgdn = NULL;
 	
 	snd_play(wavCrash, 50, 0);
 	
@@ -544,6 +549,28 @@ void RangerCreate (VECTOR *vPos)
 
 /*******************************************************************************************/
 
+void LevelNext ()
+{
+	txtLevels->skill_x += 1;
+	if(txtLevels->skill_x >= txtLevels->skill_y)
+		txtLevels->skill_x = 0;
+	
+	wait(1);
+	RangerBreak();
+	
+}
+
+void LevelPrev ()
+{
+	txtLevels->skill_x -= 1;
+	if(txtLevels->skill_x < 0)
+		txtLevels->skill_x = txtLevels->skill_y - 1;
+	
+	wait(1);
+	RangerBreak();
+	
+}
+
 void RaceStart ()
 {
 	str_cpy(strLevel, "resources\\");
@@ -561,9 +588,10 @@ void RaceStart ()
 	
 	var _timeStart = total_ticks;
 	gTimer = 0;
-	panTimer->pos_x = screen_size.x / 2;
-	panTimer->pos_y = screen_size.y - 60;
-	set(panTimer, SHOW);
+//	panTimer->pos_x = 20; //screen_size.x / 2;
+//	panTimer->pos_y = 120; //screen_size.y - 60;
+//	set(panTimer, SHOW);
+	set(panLevel, SHOW);
 	
 	var _arcNew = 0;
 	var _acceleration = 10;
@@ -571,6 +599,8 @@ void RaceStart ()
 	
 	on_space = RangerFlip;
 	on_enter = RangerBreak;
+	on_pgup = LevelNext;
+	on_pgdn = LevelPrev;
 	
 	while(!key_esc)
 	{
@@ -724,7 +754,8 @@ void MainMenu()
 		snd_stop(sndEngine);
 	sndEngine = NULL;
 	
-	reset(panTimer, SHOW);
+	//reset(panTimer, SHOW);
+	reset(panLevel, SHOW);
 	
 	level_load("");
 	wait(1);
