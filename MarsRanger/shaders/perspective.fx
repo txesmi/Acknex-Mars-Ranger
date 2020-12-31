@@ -42,8 +42,8 @@ out_vs VS (in_vs In)
 float4 PS(out_vs In): COLOR0
 {
 	float2 Coord1 = In.Tex0.xy;
-	Coord1.x += vecTime.w * 0.0002f;
-	Coord1.x += In.Pos0.x * In.Pos0.y * 0.1f;
+	Coord1.x -= vecTime.w * 0.0002f;
+	Coord1.x += In.Pos0.x * -In.Pos0.y * 0.1f;
 	float4 Tex = tex2D(smpSkin1, Coord1);
 	
 	Tex.a = 1;
@@ -56,6 +56,7 @@ technique
 {
 	pass one
 	{
+		CullMode = None;
 		VertexShader = compile vs_2_0 VS();
 		PixelShader = compile ps_2_0 PS();			
 	}		

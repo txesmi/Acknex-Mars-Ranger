@@ -73,6 +73,7 @@ SOUND *wavAmbient = "resources\\sounds\\ambient.wav";
 var sndAmbient = 0;
 SOUND *wavButtonOver = "resources\\sounds\\electric.wav";
 SOUND *wavIntro = "resources\\sounds\\intro.wav";
+SOUND *wavHighScore = "resources\\sounds\\highscore.wav";
 
 
 
@@ -138,19 +139,12 @@ PANEL *panLevel =
 {
 	pos_x = 10;
 	pos_y = 10;
-	digits(0, 0, strLevel, fntTitle, 1, NULL);
-	digits(10, 30, "Best:   %6.3f", fntStats, 1, highscore);
-	digits(10, 50, "Last:   %6.3f", fntStats, 1, gTimerLast);
-	digits(140, 30, "%6.3f", fntTimer, 1, gTimer);
+	digits(0,    0, strLevel,        fntTitle, 1, NULL);
+	digits(10,  30, "Best:   %6.3f", fntStats, 1, highscore);
+	digits(10,  50, "Last:   %6.3f", fntStats, 1, gTimerLast);
+	digits(140, 30, "%6.3f",         fntTimer, 1, gTimer);
 	
 }
-
-//PANEL *panTimer =
-//{
-//	digits(0, 0, "%6.3f", fntTimer, 1, gTimer);
-//	
-//	//flags = CENTER_X;
-//}
 
 /*******************************************************************************************/
 
@@ -159,7 +153,15 @@ MATERIAL *mtlPerpective =
 	effect = "shaders\\perspective.fx";
 }
 
+MATERIAL *mtlSpecSolid =
+{
+	effect = "shaders\\SpecSolid.fx";
+}
 
+MATERIAL *mtlTriplanar =
+{
+	effect = "shaders\\triplanar.fx";
+}
 
 /*******************************************************************************************/
 
@@ -201,15 +203,12 @@ void GoalHit()
 	
 	wait(1);
 	
-//	txtLevels->skill_x += 1;
-//	if(txtLevels->skill_x >= txtLevels->skill_y)
-//		txtLevels->skill_x = 0;
-	
 	RangerBreak();
 	
 	if(gTimer < highscore)
 	{
 		HighScoreSet(strLevel, gTimer);
+		snd_play(wavHighScore, 50, 0);
 	}
 	
 	gTimerLast = gTimer;
@@ -242,13 +241,13 @@ void EventChassis()
 
 void EventWheel()
 {
-	ENTITY *ent = NULL;
+	ENTITY *_ent = NULL;
 	if(you)
 	{
 		if((you->skill99 > 0) && (you->body))
 		{
 			pXent_settype(you, 0, 0);
-			ent = you;
+			_ent = you;
 			GoalHit();
 		}
 		else
@@ -261,8 +260,8 @@ void EventWheel()
 
 	wait(1);
 	
-	if(ent)
-		ent_remove(ent);
+	if(_ent)
+		ent_remove(_ent);
 }
 
 void EventAntenna()
@@ -290,7 +289,7 @@ void RangerFlip ()
 	if(!ranger->active) return;
 	
 	pX_pause(1);
-
+	
 	ENTITY *_ent = entGoal;
 	for(; _ent; _ent = _ent->parent)
 	{
@@ -364,6 +363,8 @@ void RangerFlip ()
 	else
 		ranger->traction = ranger->wheel[0];
 	
+	mtlSpecSolid->skill1 = floatv(ranger->direction);
+	
 	pX_pause(0);
 }
 
@@ -430,9 +431,11 @@ void RangerCreate (VECTOR *vPos)
 	_vPos.y += 110;
 	_vPos.z -= 70;
 	ranger->wheel[0] = ent_create("resources\\models\\wheel.mdl", &_vPos, NULL);
+	ranger->wheel[0]->material = mtlSpecSolid;
 	
 	_vPos.y -= 220;
 	ranger->wheel[1] = ent_create("resources\\models\\wheel.mdl", &_vPos, NULL);
+	ranger->wheel[1]->material = mtlSpecSolid;
 	
 	vec_set(&_vPos, vector(0, -70, 40));
 	vec_add(&_vPos, &ranger->chassis->x);
@@ -481,9 +484,9 @@ void RangerCreate (VECTOR *vPos)
 	pXent_setelasticity(ranger->antenna[1], 10);
 	pXent_setelasticity(ranger->antenna[2], 10);
 	
-	pXent_setdamping(ranger->chassis, 0, 0);
-	pXent_setdamping(ranger->wheel[0], 0, 50);
-	pXent_setdamping(ranger->wheel[1], 0, 50);
+	pXent_setdamping(ranger->chassis, 0, 100);
+	pXent_setdamping(ranger->wheel[0], 0, 0);
+	pXent_setdamping(ranger->wheel[1], 0, 0);
 	pXent_setdamping(ranger->antenna[0], 0, 0);
 	pXent_setdamping(ranger->antenna[1], 0, 0);
 	pXent_setdamping(ranger->antenna[2], 0, 0);
@@ -536,10 +539,17 @@ void RangerCreate (VECTOR *vPos)
 	
 	vec_fill(&ranger->wheel[0]->scale_x, 1);
 	vec_fill(&ranger->wheel[1]->scale_x, 1);
+	ranger->wheel[0]->scale_x *= -1;
+	ranger->wheel[1]->scale_x *= -1;
+	
+	ent_morph(ranger->chassis, "resources\\models\\chassis.mdl");
+	ranger->chassis->material = mtlSpecSolid;
 	
 	ranger->active = 1;
 	ranger->direction = -1;
 	ranger->speed = 0;
+	
+	mtlSpecSolid->skill1 = floatv(ranger->direction);
 	
 	ranger->traction = ranger->wheel[0];
 	
@@ -581,10 +591,27 @@ void RaceStart ()
 	if(highscore < 1)
 		highscore = 999999;
 	
-
-	reset(camera, ISOMETRIC);
-	camera->x = 2000;
-	camera->pan = 180;
+	
+	int _i = 0;
+	int _iLast = minv((level_ent->max_y + level_ent->max_z) / 500.0, 500);
+	for(; _i < _iLast; _i += 1)
+	{
+		int _cloud = random(4);
+		switch(_cloud)
+		{
+			case 0: 
+				you = ent_create("resources\\images\\cloud00.tga", vec_scale(vector(-2000 - random(5000), level_ent->min_y + random(level_ent->max_y - level_ent->min_y), level_ent->min_z + random(level_ent->max_z - level_ent->min_z)), 1.2), NULL); break;
+			case 1: 
+				you = ent_create("resources\\images\\cloud01.tga", vec_scale(vector(-2000 - random(5000), level_ent->min_y + random(level_ent->max_y - level_ent->min_y), level_ent->min_z + random(level_ent->max_z - level_ent->min_z)), 1.2), NULL); break;
+			case 2: 
+				you = ent_create("resources\\images\\cloud02.tga", vec_scale(vector(-2000 - random(5000), level_ent->min_y + random(level_ent->max_y - level_ent->min_y), level_ent->min_z + random(level_ent->max_z - level_ent->min_z)), 1.2), NULL); break;
+			case 3: 
+				you = ent_create("resources\\images\\cloud03.tga", vec_scale(vector(-2000 - random(5000), level_ent->min_y + random(level_ent->max_y - level_ent->min_y), level_ent->min_z + random(level_ent->max_z - level_ent->min_z)), 1.2), NULL); break;
+		}
+		vec_fill(&you->scale_x, 4 + random(2));
+		set(you, BRIGHT);
+		//vec_fill()
+	}
 	
 	var _timeStart = total_ticks;
 	gTimer = 0;
@@ -605,7 +632,6 @@ void RaceStart ()
 	while(!key_esc)
 	{
 		gTimer = (total_ticks - _timeStart) / 16.0;
-		DEBUG_VAR(goalCount, 400);
 		
 		physX_run(time_frame / 16);
 		
@@ -623,8 +649,8 @@ void RaceStart ()
 			
 			if(key_force.y > 0)
 			{
-				if(ranger->inContact)
-				{
+//				if(ranger->inContact)
+//				{
 					if(!key_shift)
 					{
 						ranger->speed = minv(ranger->speed + time_step * _acceleration, 100);
@@ -635,7 +661,7 @@ void RaceStart ()
 						ranger->speed = minv(ranger->speed + time_step * _acceleration * 0.1, 10);
 						pXent_setangvelocity(ranger->traction, vector(ranger->speed * 15 * ranger->direction, 0, 0));
 					}
-				}
+//				}
 				
 //				if(ranger->speed > 300)
 //					_runOut += time_step;
@@ -754,11 +780,10 @@ void MainMenu()
 		snd_stop(sndEngine);
 	sndEngine = NULL;
 	
-	//reset(panTimer, SHOW);
 	reset(panLevel, SHOW);
 	
 	level_load("");
-	wait(1);
+	
 	on_esc = NULL;
 	
 	// Background setup
@@ -773,9 +798,8 @@ void MainMenu()
 	camera->arc = (1024 / screen_size.x) * 50;
 	
 	// Create background
-	you = ent_create("resources\\models\\plane.mdl", nullvector, NULL);
+	you = ent_createlayer("resources\\models\\plane.mdl", SKY | SCENE, 1);
 	you->material = mtlPerpective;
-	you->pan = 180;
 	
 	// Show title
 	panTitle->pos_x = (screen_size.x / 2) - 256;
@@ -802,8 +826,23 @@ void LevelLoad()
 	if(!NxPhysicsSDK) 
 		return;
 	
+	sun_angle.pan = 0;
+	sun_angle.tilt = 90;
+	
+	sun_color.blue = 100;
+	sun_color.green = 185;
+	sun_color.red = 255;
+	
+	reset(camera, ISOMETRIC);
+	camera->x = 2000;
+	camera->pan = 180;
+	
 	if(level_ent)
+	{
 		pXent_settype(level_ent, PH_STATIC, PH_POLY);
+		level_ent->material = mtlTriplanar;
+		c_setminmax(level_ent);
+	}
 	
 	ENTITY *entStart = NULL;
 	entGoal = NULL;
@@ -867,14 +906,11 @@ void LevelLoad()
 			pXent_setcollisionflag(ranger->antenna[2], _ent, NX_NOTIFY_ON_START_TOUCH);
 			
 			pXent_setgroup(_ent, 3);
-			
-			
 			_ent->skill99 = 1;
 		}
 		
 		on_esc = MainMenu;
 	}
-	
 }
 
 void EntityRemove(ENTITY* ent)
@@ -896,6 +932,8 @@ void WindowClose()
 
 void WindowInit ()
 {
+	d3d_antialias = 9;
+	
 	// Engine setup
 	mouse_pointer = 0;
 	
@@ -920,6 +958,9 @@ void WindowInit ()
 	on_exit = WindowClose;
 	on_level_load = LevelLoad;
 	on_ent_remove = EntityRemove;
+	
+	// Material of blocks
+	mtl_shaded = mtlTriplanar;
 }
 
 /*******************************************************************************************/
@@ -942,9 +983,8 @@ void Intro()
 	camera->arc = (1024 / screen_size.x) * 50;
 	
 	// Create background
-	you = ent_create("resources\\models\\plane.mdl", nullvector, NULL);
+	you = ent_createlayer("resources\\models\\plane.mdl", SKY | SCENE, 1);
 	you->material = mtlPerpective;
-	you->pan = 180;
 	
 	// Show title
 	panTitle->pos_x = (screen_size.x / 2) - 256;
