@@ -14,6 +14,14 @@ void RaceStart ();
 
 /*******************************************************************************************/
 
+#define GROUP_LEVEL    2
+#define GROUP_WHEEL    3
+#define GROUP_CHASSIS  4
+#define GROUP_ANTENNA  5
+#define GROUP_GOAL     6
+
+/*******************************************************************************************/
+
 typedef struct {
 	long offset; // offset of the list from the start of the WMB file, in bytes
 	long length; // length of the list, in bytes
@@ -217,6 +225,9 @@ void GoalHit()
 
 void EventChassis()
 {
+	if(!ranger->active) 
+		return;
+	
 	ENTITY *_ent = NULL;
 	if(you)
 	{
@@ -241,6 +252,9 @@ void EventChassis()
 
 void EventWheel()
 {
+	if(!ranger->active) 
+		return;
+	
 	ENTITY *_ent = NULL;
 	if(you)
 	{
@@ -266,6 +280,9 @@ void EventWheel()
 
 void EventAntenna()
 {
+	if(!ranger->active) 
+		return;
+	
 	ENTITY *ent = NULL;
 	if(you)
 	{
@@ -286,7 +303,8 @@ void EventAntenna()
 
 void RangerFlip ()
 {
-	if(!ranger->active) return;
+	if(!ranger->active) 
+		return;
 	
 	pX_pause(1);
 	
@@ -340,9 +358,12 @@ void RangerFlip ()
 	pXcon_setparams1(ranger->antenna[2], vector(0, ranger->antenna[2]->y, ranger->antenna[1]->z), vector(1, 0, 0), NULL);
 	pXcon_setparams2(ranger->antenna[2], vector(-4, 4, 0), NULL, NULL);
 	
-	pXent_setgroup(ranger->antenna[0], 2);
-	pXent_setgroup(ranger->antenna[1], 2);
-	pXent_setgroup(ranger->antenna[2], 3);
+	pXent_setgroup(ranger->antenna[0], GROUP_CHASSIS);
+	pXent_setgroup(ranger->antenna[1], GROUP_CHASSIS);
+	pXent_setgroup(ranger->antenna[2], GROUP_ANTENNA);
+	
+	pXent_setcollisionflag(ranger->antenna[2], NULL, NX_NOTIFY_ON_START_TOUCH);
+	
 	
 	ENTITY *_ent = entGoal;
 	for(; _ent; _ent = _ent->parent)
@@ -485,23 +506,23 @@ void RangerCreate (VECTOR *vPos)
 	pXent_setelasticity(ranger->antenna[2], 10);
 	
 	pXent_setdamping(ranger->chassis, 0, 100);
-	pXent_setdamping(ranger->wheel[0], 0, 0);
-	pXent_setdamping(ranger->wheel[1], 0, 0);
-	pXent_setdamping(ranger->antenna[0], 0, 0);
-	pXent_setdamping(ranger->antenna[1], 0, 0);
-	pXent_setdamping(ranger->antenna[2], 0, 0);
+	pXent_setdamping(ranger->wheel[0], 0, 100);
+	pXent_setdamping(ranger->wheel[1], 0, 100);
+	pXent_setdamping(ranger->antenna[0], 0, 100);
+	pXent_setdamping(ranger->antenna[1], 0, 100);
+	pXent_setdamping(ranger->antenna[2], 0, 100);
 	
 	pXent_setbodyflagall(NX_BF_FROZEN_POS_X, 1);
 	pXent_setbodyflagall(NX_BF_FROZEN_PAN, 1);
 	pXent_setbodyflagall(NX_BF_FROZEN_TILT, 1);
 	
-	pXent_setgroup(level_ent, 2);
-	pXent_setgroup(ranger->chassis, 2);
-	pXent_setgroup(ranger->wheel[0], 3);
-	pXent_setgroup(ranger->wheel[1], 3);
-	pXent_setgroup(ranger->antenna[0], 2);
-	pXent_setgroup(ranger->antenna[1], 2);
-	pXent_setgroup(ranger->antenna[2], 2);
+	pXent_setgroup(level_ent, GROUP_LEVEL);
+	pXent_setgroup(ranger->chassis, GROUP_CHASSIS);
+	pXent_setgroup(ranger->wheel[0], GROUP_WHEEL);
+	pXent_setgroup(ranger->wheel[1], GROUP_WHEEL);
+	pXent_setgroup(ranger->antenna[0], GROUP_CHASSIS);
+	pXent_setgroup(ranger->antenna[1], GROUP_CHASSIS);
+	pXent_setgroup(ranger->antenna[2], GROUP_ANTENNA);
 	
 	pXent_setmaxspeed(ranger->chassis, 500);
 	pXent_setmaxspeed(ranger->wheel[0], 1500);
@@ -524,8 +545,8 @@ void RangerCreate (VECTOR *vPos)
 	pXcon_setparams1(ranger->antenna[2], vector(0, ranger->antenna[2]->y, ranger->antenna[1]->z), vector(1,0,0), NULL);
 	pXcon_setparams2(ranger->antenna[2], vector(-4, 4, 0), NULL, NULL);
 
-	pXent_setcollisionflag(ranger->chassis, NULL, NX_NOTIFY_ON_START_TOUCH);
-	ranger->chassis->event = EventChassis;
+//	pXent_setcollisionflag(ranger->chassis, NULL, NX_NOTIFY_ON_START_TOUCH);
+//	ranger->chassis->event = EventChassis;
 	
 	pXent_setcollisionflag(ranger->wheel[1], NULL, NX_NOTIFY_ON_TOUCH);
 	ranger->wheel[1]->event = EventWheel;
@@ -535,7 +556,19 @@ void RangerCreate (VECTOR *vPos)
 	
 	ranger->antenna[0]->event = EventAntenna;
 	ranger->antenna[1]->event = EventAntenna;
-	ranger->antenna[2]->event = EventAntenna;
+	
+	pXent_setcollisionflag(ranger->antenna[2], NULL, NX_NOTIFY_ON_START_TOUCH);
+	ranger->antenna[2]->event = EventChassis;
+	
+	pX_setgroupcollision(GROUP_LEVEL, GROUP_CHASSIS, 0);
+	pX_setgroupcollision(GROUP_LEVEL, GROUP_WHEEL, 1);
+	pX_setgroupcollision(GROUP_LEVEL, GROUP_ANTENNA, 1);
+	pX_setgroupcollision(GROUP_CHASSIS, GROUP_WHEEL, 0);
+	pX_setgroupcollision(GROUP_CHASSIS, GROUP_ANTENNA, 0);
+	pX_setgroupcollision(GROUP_CHASSIS, GROUP_GOAL, 1);
+	pX_setgroupcollision(GROUP_WHEEL, GROUP_ANTENNA, 0);
+	pX_setgroupcollision(GROUP_WHEEL, GROUP_GOAL, 1);
+	
 	
 	vec_fill(&ranger->wheel[0]->scale_x, 1);
 	vec_fill(&ranger->wheel[1]->scale_x, 1);
@@ -615,19 +648,15 @@ void RaceStart ()
 	
 	var _timeStart = total_ticks;
 	gTimer = 0;
-//	panTimer->pos_x = 20; //screen_size.x / 2;
-//	panTimer->pos_y = 120; //screen_size.y - 60;
-//	set(panTimer, SHOW);
 	set(panLevel, SHOW);
 	
 	var _arcNew = 0;
 	var _acceleration = 10;
-//	var _runOut = 0;
 	
 	on_space = RangerFlip;
 	on_enter = RangerBreak;
-	on_pgup = LevelNext;
-	on_pgdn = LevelPrev;
+	on_pgup = LevelPrev;
+	on_pgdn = LevelNext;
 	
 	while(!key_esc)
 	{
@@ -663,11 +692,6 @@ void RaceStart ()
 					}
 //				}
 				
-//				if(ranger->speed > 300)
-//					_runOut += time_step;
-//				
-//				if(_runOut > 32)
-//					RangerBreak ();
 				
 			}
 			else if(key_force.y < 0)
@@ -681,9 +705,9 @@ void RaceStart ()
 			}
 			else
 			{
-				if(ranger->direction > 0)
-					ranger->speed = maxv(ranger->speed -(time_step * _acceleration), 0);
-				else
+//				if(ranger->direction > 0)
+//					ranger->speed = maxv(ranger->speed -(time_step * _acceleration), 0);
+//				else
 					ranger->speed = maxv(ranger->speed -(time_step * _acceleration * 0.1), 0);
 				
 				pXent_setangvelocity(ranger->traction, vector(maxv(abs(vSpeed.x), ranger->speed * 15) * ranger->direction, 0, 0));
@@ -716,9 +740,6 @@ void RaceStart ()
 		
 		wait(1);
 	}
-//	if(snd_playing(sndEngine))
-//		snd_stop(sndEngine);
-//	sndEngine = NULL;
 }
 
 var ButtonExit ()
@@ -839,9 +860,10 @@ void LevelLoad()
 	
 	if(level_ent)
 	{
-		pXent_settype(level_ent, PH_STATIC, PH_POLY);
-		level_ent->material = mtlTriplanar;
 		c_setminmax(level_ent);
+		pXent_settype(level_ent, PH_STATIC, PH_POLY);
+//		pXent_setgroup(level_ent, 2)
+		level_ent->material = mtlTriplanar;
 	}
 	
 	ENTITY *entStart = NULL;
@@ -905,7 +927,7 @@ void LevelLoad()
 			pXent_setcollisionflag(ranger->antenna[1], _ent, NX_NOTIFY_ON_START_TOUCH);
 			pXent_setcollisionflag(ranger->antenna[2], _ent, NX_NOTIFY_ON_START_TOUCH);
 			
-			pXent_setgroup(_ent, 3);
+			pXent_setgroup(_ent, GROUP_GOAL);
 			_ent->skill99 = 1;
 		}
 		

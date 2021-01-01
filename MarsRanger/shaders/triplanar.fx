@@ -31,7 +31,7 @@ psOut PS (vsOut In) {
 		psOut Out;
 		In.normal = normalize(In.normal);
 		
-		Out.color0.rgb = saturate(lerp(float3(0.42f, 0.28f, 0.17f), float3(0.81f, 0.45f, 0.12f), In.normal.y));
+		Out.color0.rgb = saturate(lerp(float3(0.42f, 0.28f, 0.17f), float3(0.81f, 0.45f, 0.12f), In.normal.y) * (1.0f - abs(In.normal.z) * 0.5f));
 		Out.color0.a = 1;
 		
 		return Out;
